@@ -1,0 +1,54 @@
+---
+title: "Assignment_1 64060"
+output:
+  word_document: default
+  html_notebook: default
+  pdf_document: default
+---
+
+This is an [R Markdown](http://rmarkdown.rstudio.com) Notebook. When you execute code within the notebook, the results appear beneath the code. 
+
+Try executing this chunk by clicking the *Run* button within the chunk or by placing your cursor inside it and pressing *Ctrl+Shift+Enter*. 
+
+```{r}
+library(readr)
+library(dplyr)
+titanic <- read_csv("titanic.csv") ## dataset containing information from the occupants of the titanic at the time of the disaster. Source https://github.com/datasciencedojo/datasets/blob/master/titanic.csv
+spec(titanic)
+
+class(titanic$Pclass) ##Check initial class of Pclass variable
+titanic$Pclass <- as.character(titanic$Pclass) ## Transform Pclass to act as a classification rather than a numeric value split into 3 categories - 1st, 2nd, 3rd
+class(titanic$Pclass) ## Recheck class to confirm change
+titanic$Pclass <- as.factor(titanic$Pclass) ##Change into a factor
+
+class(titanic$Survived) ## Check initial class of Survived variable
+titanic$Survived <- as.logical(titanic$Survived) ## Transform the variable into a logical value of True and False rather than 1 and 0
+class(titanic$Survived) ##Recheck transformation to confirm change
+titanic$Survived <- as.factor(titanic$Survived) ##Change into a factor
+
+titanic$Sex <- as.factor(titanic$Sex) ##Change categorical variable into a factor
+
+titanic$Embarked <- recode(titanic$Embarked, "C" = "Cherbourg", "Q" = "Queenstown", "S" = "Southampton") ##Redcoded the names of the 3 options under the embarked variable to list the entire city name rather than just the first letter. 
+titanic$Embarked <- as.factor(titanic$Embarked) ##Transformed this variable into a factor with three levels
+
+titanic <- arrange(titanic, titanic$Fare) ##Rearranged the dataframe to sort by the Fare variable in a accending order
+
+length(titanic$PassengerId)##Find the total number of observations in the dataframe by using the PassengerID variable
+summary(titanic$Age) ##Summarise the Age variable of the data frame. Can use this information to identifie number of missing entries "NA's" as well as other relevent statistical information
+MeanFare <- mean(titanic$Fare) ##Creates a new variable MeanFare by running the average of the fare prices in the data frame
+MeanFare ##Prints MeanFare variable
+
+summary(titanic$Sex) ## Gives a summary of the Sex variable in the data frame. 314 Females and 577 Males
+EmbarkedCity <- table(titanic$Embarked) ##Creates a table listing the amount of people who embarked from each city.
+EmbarkedCity ## Prints table of the Embarked cities. Southampton was the most popular city to board from
+
+hist(titanic$Age) ##shows the frequency of the Age variable by the decade. The majority age range was 20 through 30 years old
+plot(titanic$Age, titanic$Fare) ##plot the correlation between the Age variable (x) and the Fare price (y). From the plot there seems to be no direct correlation between the two
+
+```
+
+Add a new chunk by clicking the *Insert Chunk* button on the toolbar or by pressing *Ctrl+Alt+I*.
+
+When you save the notebook, an HTML file containing the code and output will be saved alongside it (click the *Preview* button or press *Ctrl+Shift+K* to preview the HTML file).
+
+The preview shows you a rendered HTML copy of the contents of the editor. Consequently, unlike *Knit*, *Preview* does not run any R code chunks. Instead, the output of the chunk when it was last run in the editor is displayed.
