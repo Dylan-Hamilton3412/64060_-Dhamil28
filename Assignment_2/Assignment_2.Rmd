@@ -1,0 +1,238 @@
+---
+title: "Assignment_2"
+output:
+  word_document: default
+  html_notebook: default
+---
+
+This is an [R Markdown](http://rmarkdown.rstudio.com) Notebook. When you execute code within the notebook, the results appear beneath the code. 
+
+Try executing this chunk by clicking the *Run* button within the chunk or by placing your cursor inside it and pressing *Ctrl+Shift+Enter*. 
+
+```{r}
+## Assignment 2 files can be located in my GitHub repository https://github.com/Dylan-Hamilton3412/64060_-Dhamil28
+
+## Import required packages for data preparation, preprocessing,
+## k-NN classification, and model evaluation.
+library(dplyr)
+library(caret)
+library(readr)
+library(class)
+library(FNN)
+library(gmodels)
+
+## Set seed to ensure results are reproducible.
+set.seed(123)  
+
+## Load the Universal Bank dataset and review the structure.
+## Personal.Loan is the target variable to be predicted per the assignment instructions
+BankData <- read.csv("UniversalBank.csv")
+summary(BankData)
+str(BankData)
+
+## Remove ID and ZIP Code because they do not provide meaningful predictive value and could distort distance calculations.
+BankData_1 <- select(BankData, -ZIP.Code, -ID)
+
+## Convert Education to a factor because it is a categorical variable.
+BankData_1$Education <- as.factor(BankData_1$Education)
+
+## Create a 60% training set and 40% validation set.
+## Stratified sampling preserves the class distribution.
+Train_Index_1 <- createDataPartition(BankData_1$Personal.Loan, p = .6, list=FALSE)
+
+## k-NN requires numeric inputs. Therefore, Education is converted into dummy variables using the training data only.
+Train_BankData_1 <- BankData_1[Train_Index_1,]
+edu_dummy <- dummyVars(~ Education, data = Train_BankData_1)
+edu_train <- predict(edu_dummy, newdata = Train_BankData_1)
+Train_BankData_1 <- cbind(Train_BankData_1, edu_train)
+## Remove the original Education variable after creating dummies.
+Train_BankData_1$Education <- NULL
+
+## Using the Same process as above and apply to validation set 
+Val_BankData_1 <- BankData_1[-Train_Index_1,]
+edu_test <- predict(edu_dummy, newdata = Val_BankData_1)
+Val_BankData_1 <- cbind(Val_BankData_1, edu_test)
+Val_BankData_1$Education <- NULL
+
+## Separate predictor variables from the target variable. Personal.Loan should not be normalized since it is the target variable
+Train_Norm_1 <- select(Train_BankData_1, -Personal.Loan)
+Val_Norm_1<- select(Val_BankData_1, -Personal.Loan)
+
+## Creating set with only the target variable
+Train_PL_1 <- as.factor(Train_BankData_1$Personal.Loan)
+Val_PL_1 <- as.factor(Val_BankData_1$Personal.Loan)
+
+## Normalize all predictor variables using z-score standardization.
+## Normalization is important for k-NN because distance calculations are sensitive to variable scale.
+norm.val <- preProcess(Train_Norm_1, method = c("center","scale"))
+
+## Apply training-set normalization parameters to both datasets.
+Train_Norm_1 <- predict(norm.val, Train_Norm_1)
+Val_Norm_1 <- predict(norm.val, Val_Norm_1)
+## By using the summary below we can identify the normalization acted appropriately by the means of the variables being 0
+summary(Train_Norm_1)
+
+## Test my datasets to ensure that output predications match expectations
+Predicted_N_Labels <- knn(Train_Norm_1, Val_Norm_1,Train_PL_1, prob = FALSE, k=1)
+head(Predicted_N_Labels)
+
+## Question 1
+## Classify the specified customer using k = 1.
+Customer_1 <- data.frame(Age = 40, Experience = 10, Income = 84, Family = 2, CCAvg = 2, Mortgage = 0, Securities.Account = 0, CD.Account = 0, Online = 1, CreditCard = 1, Education.1 = 0, Education.2 = 1, Education.3 = 0)
+
+## Apply the same normalization used on the training data.
+Customer_1 <- predict(norm.val, Customer_1)
+Customer_1_Class <- knn(Train_Norm_1, Customer_1, Train_PL_1, prob = FALSE, k=1)
+Customer_1_Class
+## Result:
+## Customer classified as: 0
+## Interpretation: The nearest customer in the training set did not
+## accept the loan offer, therefore this customer is predicted not
+## to accept the loan.
+
+## Question 2
+## Evaluate k values from 1 to 20 and identify the value that
+## provides the best balance between overfitting and underfitting.
+Knn_Accuracy <- data.frame(k = seq(1, 20, 1), accuracy = rep(0, 20))
+for(i in 1:20) {
+  knn.pred <- knn(Train_Norm_1, Val_Norm_1, Train_PL_1, prob = FALSE, k=i)
+  Knn_Accuracy[i, 2] <- confusionMatrix(knn.pred, Val_PL_1)$overall[1] 
+}
+
+Knn_Accuracy
+
+## Insight:
+## Even though the highest accuracy was k=1 Small k values are sensitive to noise and may overfit.
+## Large k values smooth the decision boundary and may underfit.
+## Based on validation accuracy, k = 1 however based off the possibility of overfitting the most realistic is k = 3 with
+## an accuracy of .9585 to compromise between these extremes.
+
+## Question 3
+## Generate a confusion matrix using the selected value of k.
+Conf_Mat_Pred <- knn(Train_Norm_1, Val_Norm_1,Train_PL_1, prob = FALSE, k=3)
+CrossTable(Val_PL_1, Conf_Mat_Pred, prop.chisq = FALSE)
+
+## Insight:
+## The confusion matrix shows the model correctly identifies
+## most customers who reject the loan while maintaining reasonable
+## performance in identifying customers who accept the loan.
+
+## Question 4
+## Reclassify the same customer using the selected value of k = 3.
+Customer_K3_Class <- knn(Train_Norm_1,Customer_1,Train_PL_1, prob = FALSE, k = 3)
+Customer_K3_Class
+
+## Result:
+## Customer classified as: 0
+## Even after considering the three nearest neighbors, the majority
+## vote predicts that the customer will not accept the loan offer.
+
+## Question 5:
+## Repartition the data into Training (50%), Validation (30%),
+## and Test (20%) datasets.
+
+## The below partitioning, normalization and transformations are all completed identically to the first
+## section of this code this is why no additional comments are made to describe the process
+
+BankData_2 <- select(BankData, -ZIP.Code, -ID)
+BankData_2$Education <- as.factor(BankData_2$Education)
+
+## First create the test set (20%).
+## Then split the remaining 80% into training and validation sets.
+Test_Index_2 <- createDataPartition(BankData_2$Personal.Loan, p = .2, list=FALSE)
+Test_Data_2 <- BankData_2[Test_Index_2,]
+TrainVal_Data_2 <- BankData_2[-Test_Index_2,]
+
+Train_Index_2 <- createDataPartition(TrainVal_Data_2$Personal.Loan, p = .625, list=FALSE)
+Train_Data_2 <- TrainVal_Data_2[Train_Index_2,]
+Val_Data_2 <- TrainVal_Data_2[-Train_Index_2,]
+
+edu_dummy_2 <- dummyVars(~ Education, data = Train_Data_2)
+
+edu_Test_2 <- predict(edu_dummy_2, newdata = Test_Data_2)
+edu_Train_2 <- predict(edu_dummy_2, newdata = Train_Data_2)
+edu_Val_2 <- predict(edu_dummy_2, newdata = Val_Data_2)
+
+Test_Data_2 <- cbind(Test_Data_2, edu_Test_2)
+Train_Data_2 <- cbind(Train_Data_2, edu_Train_2)
+Val_Data_2 <- cbind(Val_Data_2, edu_Val_2)
+
+Test_Data_2$Education = NULL
+Train_Data_2$Education = NULL
+Val_Data_2$Education = NULL
+
+Test_Norm_2 <- select(Test_Data_2, -Personal.Loan)
+Train_Norm_2 <- select(Train_Data_2, -Personal.Loan)
+Val_Norm_2 <- select(Val_Data_2, -Personal.Loan)
+
+Test_PL_2 <- as.factor(Test_Data_2$Personal.Loan)
+Train_PL_2 <- as.factor(Train_Data_2$Personal.Loan)
+Val_PL_2 <- as.factor(Val_Data_2$Personal.Loan)
+
+norm.val_2 <- preProcess(Train_Norm_2, method = c("center","scale"))
+Test_Norm_2 <- predict(norm.val_2, Test_Norm_2)
+Train_Norm_2 <- predict(norm.val_2, Train_Norm_2)
+Val_Norm_2 <- predict(norm.val_2, Val_Norm_2)
+
+## By using the summary below we can identify the normalization acted appropriately by the means of the variables being 0
+summary(Train_Norm_2)
+
+Test_2_Class <- knn(Train_Norm_2, Test_Norm_2, Train_PL_2, prob = FALSE, k=3)
+Train_2_Class <- knn(Train_Norm_2, Train_Norm_2, Train_PL_2, prob = FALSE, k=3)
+Val_2_Class <- knn(Train_Norm_2, Val_Norm_2, Train_PL_2, prob = FALSE, k=3)
+
+## Calculate performance metrics for comparison across datasets.
+## Recall measures the ability to identify loan acceptors.
+## Precision measures the proportion of predicted acceptors that actually accepted the loan.
+## TNR measures the ability to identify non-acceptors.
+## FPR measures the rate of false positives.
+
+CrossTable(Test_PL_2, Test_2_Class, prop.chisq = FALSE)
+Test_Recall <- 60/92
+Test_Prec <- 60/66
+Test_TNR <- 902/934
+Test_FPR <- 1-Test_TNR
+
+CrossTable(Train_PL_2, Train_2_Class, prop.chisq = FALSE)
+Train_Recall <- 181/234
+Train_Prec <- 181/187
+Train_TNR <- 2260/2313
+Train_FPR <- 1-Train_TNR
+
+CrossTable(Val_PL_2, Val_2_Class, prop.chisq = FALSE)
+Val_Recall <- 101/154
+Val_Prec <-101/114
+Val_TNR <- 1333/1386
+Val_FPR <- 1-Val_TNR
+
+## For easier comparison of the confusion matrix values I created a table using the recall, precision
+## true negative rate, and false positive rate
+CFM_Metrics <- data.frame(
+  Dataset = c("Train", "Validation", "Test"),
+  Recall = c(Train_Recall, Val_Recall, Test_Recall),
+  Precision = c(Train_Prec, Val_Prec, Test_Prec),
+  TNR = c(Train_TNR, Val_TNR, Test_TNR),
+  FPR = c(Train_FPR, Val_FPR, Test_FPR)
+)
+
+CFM_Metrics
+
+## Insight:
+## Training performance is slightly better than validation and test
+## performance because the model was built using the training data.
+##
+## Validation and test metrics are very similar, indicating that the
+## model generalizes reasonably well to unseen customers.
+##
+## The relatively high precision and TNR values suggest the model is
+## effective at identifying customers who are unlikely to accept a
+## loan offer. Recall is lower, indicating some potential loan
+## acceptors are still being missed.
+
+```
+
+Add a new chunk by clicking the *Insert Chunk* button on the toolbar or by pressing *Ctrl+Alt+I*.
+
+When you save the notebook, an HTML file containing the code and output will be saved alongside it (click the *Preview* button or press *Ctrl+Shift+K* to preview the HTML file).
+
+The preview shows you a rendered HTML copy of the contents of the editor. Consequently, unlike *Knit*, *Preview* does not run any R code chunks. Instead, the output of the chunk when it was last run in the editor is displayed.
