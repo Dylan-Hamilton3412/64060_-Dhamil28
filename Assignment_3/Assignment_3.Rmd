@@ -1,0 +1,147 @@
+---
+title: "Assignment_3"
+output:
+  word_document: default
+  html_notebook: default
+---
+
+```{r}
+## All files for this assignment can be found at https://github.com/Dylan-Hamilton3412/64060_-Dhamil28
+## Load required libraries for data manipulation, modeling, and evaluation
+library(dplyr)
+library(caret)
+library(readr)
+library(class)
+library(gmodels)
+library(e1071)
+
+## Load dataset
+BankData <- read.csv("UniversalBank.csv")
+
+## Select only relevant variables:
+## Column 10 = Online
+## Column 13 = CreditCard
+## Column 14 = Personal.Loan (target variable)
+BankData <- select(BankData, 10, 13, 14)
+
+## Convert variables to factors for classification
+BankData$Personal.Loan <- as.factor(BankData$Personal.Loan)
+BankData$Online <- as.factor(BankData$Online)
+BankData$CreditCard <- as.factor(BankData$CreditCard)
+
+## Set seed for reproducibility
+set.seed(123)
+
+## Create training (60%) and validation (40%) split
+Index_Train <- createDataPartition(BankData$Personal.Loan, p = .6, list = FALSE)
+Train_Data <- BankData[Index_Train,]
+Val_Data <- BankData[-Index_Train,]
+
+## Part A:
+## Create a pivot tables with Online as the Y and CreditCard and Personal.Loan as the X 
+Pivot_Table <- table(CC = Train_Data$CreditCard, 
+                     Loan = Train_Data$Personal.Loan, 
+                     Online = Train_Data$Online
+                    )
+## Display pivot table (counts of all combinations)
+Pivot_Table
+
+## Part B:
+
+## Use Naive Bayes formula to calculate the probability of loan acceptance
+Prob_Loan <- Pivot_Table["1","1","1"] / (Pivot_Table["1","1","1"] + Pivot_Table["1","0","1"])
+Prob_Loan <- Prob_Loan *100
+Prob_Loan
+
+##Part C:
+
+## Generate Pivot tables for the the two non target variables vs the target variable
+
+## Loan vs Online
+Online_Pivot <- table(Loan = Train_Data$Personal.Loan,
+                      Online = Train_Data$Online
+                      )
+
+## Loan vs CreditCar
+CC_Pivot <- table(Loan = Train_Data$Personal.Loan,
+                  CC = Train_Data$CreditCard
+                  )
+
+## Display tables
+Online_Pivot
+CC_Pivot
+
+## Part D:
+
+## P(CC=1 | Loan=1)
+P1 <- CC_Pivot["1", "1"] / (CC_Pivot["1", "1"] + CC_Pivot["1", "0"])
+P1 <- P1 * 100
+P1
+
+## P(Online=1 | Loan=1)
+P2 <- Online_Pivot["1", "1"] / (Online_Pivot["1", "1"] + Online_Pivot["1", "0"])
+P2 <- P2 * 100
+P2
+
+## P(Loan=1)
+P3 <- sum(Train_Data$Personal.Loan == "1") / nrow(Train_Data)
+P3 <- P3 * 100
+P3
+
+## P(CC=1 | Loan=0)
+P4 <- CC_Pivot["0", "1"] / (CC_Pivot["0", "1"] + CC_Pivot["0", "0"])
+P4 <- P4 * 100
+P4
+
+## P(Online=1 | Loan=0)
+P5 <- Online_Pivot["0", "1"] / (Online_Pivot["0", "1"] + Online_Pivot["0", "0"])
+P5 <- P5 * 100
+P5
+
+## P(Loan=0)
+P6 <- sum(Train_Data$Personal.Loan == "0") / nrow(Train_Data)
+P6 <- P6 * 100
+P6 
+
+## Part E
+##Manually compute the Naive Bayes probability using variables from Part D
+Pivot_Manual_NB_Calc <- (P1 * P2 *P3) / ((P1 * P2 *P3) + (P4 * P5 * P6))
+
+# Convert to percentage
+Pivot_Manual_NB_Calc <- Pivot_Manual_NB_Calc * 100
+Pivot_Manual_NB_Calc
+```
+```{r}
+
+## Part F
+
+```
+The probability obtained from the pivot table in Part B is 9.85%, while the probability obtained using the Naive Bayes method in Part E is approximately 10.01%. The pivot table value is a more accurate estimate because it is calculated directly from the observed frequencies of customers who have a credit card and actively use online banking. The Naive Bayes estimate assumes that Credit Card ownership and Online banking usage are conditionally independent given the loan outcome, which may not hold exactly in the data. Therefore, the probability obtained from the pivot table is considered the more accurate estimate.
+```{r}
+
+##Part G
+
+#Fit Naive Bayes model
+Loan_NB_Model <- naiveBayes(Personal.Loan ~ Online + CreditCard, data = Train_Data)
+Loan_NB_Model
+
+```
+Since the Naive Bayes classification calculation requires the product of the conditional probabilities of the predictors—in this case P(CC=1∣Loan=1), P(Online=1∣Loan=1), and the prior probability P(Loan=1), divided by the total probability across both classes (loan acceptance and non-acceptance) you would essentially need every variable calculated form Part D of this assignment. It uses both the likelihood of the predictors within each class and the overall class distribution to compute the final posterior probability P(Loan=1∣CC=1,Online=1).
+```{r}
+
+## Calculate Probability of P(Loan = 1 | CC = 1, Online = 1) given the Loan_NB_Model values
+NBVal_Manual_Calc <- (0.2916667 * 0.6111111 * 0.096) /  ((0.2916667 * 0.6111111 * 0.096) + (0.5940265 * 0.2865044 * 0.904))
+NBVal_Manual_Calc
+
+```
+The probability calculated using the Naive Bayes classification model closely matches the value obtained by manually computing the probabilities in Parts D and E. The small difference between the two results is due to rounding, but overall both methods produce nearly identical estimates for P(Loan=1∣CC=1,Online=1).
+```{r}
+
+##Using Loan_NB_Model amounts to calculate probability
+Test_df <- data.frame(Online = "1", CreditCard = "1")
+Final_Predict <- predict(Loan_NB_Model, Test_df)
+Final_Predict
+```
+The final prediction shows that if predicted this calls would result in a 0 for personal loan meaning they would be classified as not getting a personal loan
+
+```

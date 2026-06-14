@@ -1,0 +1,101 @@
+---
+title: "Assignment_4"
+output:
+  word_document: default
+  html_notebook: default
+---
+
+
+```{r}
+## All files relating to this assignment can be found at https://github.com/Dylan-Hamilton3412/64060_-Dhamil28
+## Import required libraries for data manipulation and cluster analysis
+library(tidyverse)
+library(dplyr)
+library(factoextra)
+library(ISLR)
+
+## Set seed to ensure reproducibility of the K-means results
+set.seed(123)
+
+## Read in the pharmaceutical dataset and review summary statistics
+Base_Data <- read.csv("Pharmaceuticals.csv")
+summary(Base_Data)
+```
+
+```{r}
+##Part A
+
+## Create a data frame containing only the numerical variables used for clustering
+Num_Data <- select(Base_Data, 3:11)
+
+## Standardize all variables using z-scores so that no variable dominates due to scale
+Num_Data <- scale(Num_Data,)
+Num_Data <- as.data.frame(Num_Data)
+
+## Run an elbow chart to determine the best fit of K without over-fitting the algorithm
+fviz_nbclust(Num_Data, kmeans, method = "wss")
+
+## Confirm the choice of K using silhouette values to maximize cluster separation
+fviz_nbclust(Num_Data, kmeans, method = "silhouette")
+
+## Based on both methods, K = 2 appears to provide a reasonable balance between cluster separation and model complexity
+Num_KClust <- kmeans(Num_Data, centers = 2, nstart = 25)
+## Display the number of companies assigned to each cluster
+Num_KClust$size
+
+## Visualize the clusters using a plot
+fviz_cluster(Num_KClust, data = Num_Data)
+
+## Append cluster assignments to both the scaled numerical data and the original dataset
+Num_Data <- cbind(Num_Data, "Cluster" = Num_KClust$cluster)
+Base_Data <- cbind(Base_Data, "Cluster" = Num_KClust$cluster)
+```
+Choices made in this cluster model were based off simple modeling techniques learned prior in this course. First after separating the data into the strictly numerical variables we then normalized the data set to equilateral the weights of all variables. Since we are assuming no industry knowledge if we were to not normalize the values we would have variables such as market capitalization being weighted more heavily. Along with the normalization we will use the K means or Euclidean distances since we are working with strictly numerical data points and the main goal being lumping the companies into homogeneous clusters. In order to verify the number of K clusters I used the elbow method along with the silhouette method learned in this chapter to gather optimal K
+
+```{r}
+##Part B
+
+## Calculate average values for each variable within each cluster to aid interpretation
+Cluster_Means <- aggregate(Base_Data[,3:11], by = list(Cluster = Base_Data$Cluster), mean)
+Cluster_Means
+
+## Export cluster means for further examination. File added to GitHub along with assignment
+write.csv(Cluster_Means, "Cluster_Means.csv", row.names = FALSE) 
+
+## Compare cluster averages against overall dataset averages to identify distinguishing characteristics
+summary(Base_Data)
+
+```
+Cluster 1: Large-cap firms with low risk and leverage. Strong profitability and efficiency measures, but lower revenue growth, indicating mature and financially stable companies.
+
+Cluster 2: Smaller firms with higher risk and leverage. Higher revenue growth and P/E ratios, but lower profitability, suggesting younger, growth-oriented companies.
+
+```{r}
+##Part C
+
+## Examine whether variables not used in clustering exhibit any patterns across clusters
+
+## Compare analyst recommendations by cluster
+table(Base_Data$Cluster, Base_Data$Median_Recommendation)
+
+## Compare headquarters locations by cluster
+table(Base_Data$Cluster, Base_Data$Location)
+
+## Compare stock exchange listings by cluster
+table(Base_Data$Cluster, Base_Data$Exchange)
+```
+When examining the variables not used in the clustering process, several patterns emerge. With respect to analyst recommendations, both clusters are primarily composed of firms receiving Hold and Moderate Buy ratings. However, Cluster 2 contains the only Strong Buy recommendation in the dataset, suggesting somewhat more favorable analyst sentiment. In terms of headquarters location, Cluster 1 is dominated by U.S.-based firms, while Cluster 2 exhibits greater geographic diversity, containing firms headquartered in Canada and several European countries. Finally, a clear pattern is observed with respect to stock exchange listing. Every firm in Cluster 1 is listed on the NYSE, whereas Cluster 2 contains the only firms listed on the AMEX and NASDAQ exchanges. Overall, although the clustering was based solely on financial variables, some differences in analyst sentiment, geographic location, and exchange listing are evident across the two groups.
+
+```{r}
+## Part D
+
+## Assign descriptive names to summarize the financial characteristics of each cluster
+
+## Cluster 1: Mature Industry Leaders
+## Cluster 2: Emerging Growth Firms
+```
+Cluster 1 was labeled 'Mature Industry Leaders' because these firms possess larger market capitalization, lower risk and leverage, and stronger profitability measures. Although their revenue growth is lower, they exhibit the characteristics of established and financially stable companies. Cluster 2 was labeled 'Emerging Growth Firms' because these companies tend to be smaller, exhibit higher risk and leverage, and experience stronger revenue growth. Despite their growth potential and higher valuation ratios, these firms generate lower returns and profit margins, suggesting that they are still developing relative to the larger firms in Cluster 1.
+
+```
+
+
