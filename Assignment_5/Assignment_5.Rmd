@@ -1,0 +1,154 @@
+---
+title: "Assognment_5"
+output:
+  word_document: default
+  html_notebook: default
+---
+
+
+```{r}
+## All files for this assignment can be found at https://github.com/Dylan-Hamilton3412/64060_-Dhamil28
+## Install and library required packages for this assignment
+library(ISLR)
+library(dplyr)
+library(cluster)
+library(stats)
+library(readr)
+library(class)
+library(caret)
+
+## Set a seed to ensure reproducibility
+set.seed(123)
+
+## Import the cereal data set and examine the variables
+Cereal_Data <- read.csv("Cereals.csv")
+summary(Cereal_Data)
+## From summarizing the data we can see there are a few NA variables located in the Data set
+
+## Remove cereals with missing values to ensure all observations can be clustered
+Cereal_Data <- na.omit(Cereal_Data)
+summary(Cereal_Data)
+
+## Convert categorical variables mfr and type into dummy variables
+Dummy_vars <- dummyVars(~ mfr+type, data = Cereal_Data)
+Cereal_Dummy_Var <- predict(Dummy_vars, newdata = Cereal_Data)
+## Add the dummy variables back into the original data set
+Cereal_Data <- cbind(Cereal_Data, Cereal_Dummy_Var)
+
+## Remove the original categorical variables columns
+Cereal_Data$mfr = NULL
+Cereal_Data$type = NULL
+
+## Use the cereal names as row labels so that the names are preserved
+row.names(Cereal_Data) <- Cereal_Data[,1]
+Cereal_Data <- Cereal_Data[,-1]
+
+## Normalize the data using Z-score in order to not have one variable dominate the clustering algorithm
+Cereal_Data <- scale(Cereal_Data)
+Cereal_Data <- as.data.frame(Cereal_Data)
+summary(Cereal_Data)
+
+## Compute the Euclidean distance matrix between cereals
+Data_dist <- dist(Cereal_Data, method = "euclidean")
+
+## Part A
+## Compare four linkage methods using AGNES hierarchical clustering
+
+##Single Linkage
+HClust_Single <- agnes(Cereal_Data, method = "single")
+HClust_Single$ac
+
+## Complete linkage
+HClust_Complete <- agnes(Cereal_Data, method = "complete")
+HClust_Complete$ac
+
+## Average linkage
+HClust_Average <- agnes(Cereal_Data, method = "average")
+HClust_Average$ac
+
+## Ward's linkage
+HClust_Ward <- agnes(Cereal_Data, method = "ward")
+HClust_Ward$ac
+
+## Ward's method produced the highest agglomerative coefficient (.88) this method will be used moving forward 
+
+## Display the dendrogram produced by Ward's method
+pltree(HClust_Ward, cex = 0.4, hang = -1, main = "Dendrogram of Agnes")
+
+## Part B
+
+## Perform hierarchical clustering using Ward's method and Euclidean distance
+Full_Cluster <- hclust(Data_dist, method = "ward.D2")
+
+## Plot the dendrogram to determine an appropriate number of clusters
+plot(Full_Cluster, cex = 0.4)
+
+## Divide the dendrogram into six clusters
+## Six clusters were chosen because they provided meaningful separation
+rect.hclust(Full_Cluster, k = 6, border = 1:6)
+Cut_Cluster <- cutree(Full_Cluster, k = 6)
+
+## Display the number of cereals contained in each cluster
+table(Cut_Cluster)
+
+```
+Six clusters were selected based on the dendrogram produced using Ward's method. The dendrogram showed several large vertical jumps, indicating natural separation between groups. Cutting the tree at six clusters provided a good balance between preserving distinct differences among cereals and avoiding excessive fragmentation into very small clusters. Fewer than six clusters would combine cereals with noticeably different nutritional profiles, while more than six clusters would create clusters that are overly specific and contain only a few observations. Therefore, six clusters provided the most meaningful and interpretable grouping of the cereals.
+```{r}
+## Part C
+
+## Randomly divide the data into two partitions to assess cluster stability
+Index <- sample(1:nrow(Cereal_Data), .5*nrow(Cereal_Data))
+Part_A <- Cereal_Data[Index,]
+Part_B <- Cereal_Data[-Index,]
+
+## Cluster partition A using Ward's method
+A_dist <- dist(Part_A, method = "euclidean")
+A_Cluster <- hclust(A_dist, method = "ward.D2")
+A_Cluster <- cutree(A_Cluster, k = 6)
+
+## Examine the number of cereals assigned to each cluster
+table(A_Cluster)
+
+## Calculate the centroid (mean value) for each cluster in partition A
+A_Centroids <- aggregate(Part_A, by = list(Cluster = A_Cluster), mean)
+
+## Remove the cluster labels and convert centroids to a matrix
+Centroid_Matrix <- as.matrix(A_Centroids[, -1])
+
+## Calculate distances between each observation in partition B and each cluster centroid
+Distance_Matrix <- as.matrix(dist(rbind(Centroid_Matrix, Part_B)))
+
+## Extract only the distances from centroids to observations in B
+Distance_B <- Distance_Matrix[1:nrow(Centroid_Matrix), (nrow(Centroid_Matrix)+1):nrow(Distance_Matrix)]
+
+## Assign each observation in partition B to the nearest centroid
+B_Assignment <- apply(Distance_B, 2, which.min)
+
+table(B_Assignment)
+
+## Examine the cluster assignments for observations in partition B
+table(B_Assignment, Cut_Cluster[-Index])
+```
+
+To assess cluster stability, the data were randomly divided into two partitions. Cluster centroids obtained from partition A were used to assign observations in partition B, and these assignments were compared with the six-cluster solution obtained using the entire dataset. The comparison revealed moderate agreement between the two sets of assignments. While some clusters, particularly Cluster 3, showed reasonable consistency, many observations were assigned to different clusters when the full dataset was used. This suggests that the six-cluster solution captures some meaningful structure in the data, but the clusters are not highly stable and may be sensitive to the particular sample used. Therefore, the clustering solution exhibits moderate rather than strong stability.
+
+```{r}
+## Part D
+
+## Add the cluster labels to the standardized cereal data
+Cereal_Data <- cbind(Cereal_Data, Cluster = as.factor(Cut_Cluster))
+
+## Compute the mean value of each variable within each cluster
+Cluster_Means <- aggregate(.~ Cluster, data = Cereal_Data, mean)
+
+## Display the cluster means for interpretation
+Cluster_Means
+
+## Export cluster means for further examination. File added to GitHub along with assignment
+write.csv(Cluster_Means, "Cluster_Means.csv", row.names = FALSE) 
+```
+After examining the average values of the six clusters, Cluster 1 was identified as the healthiest group of cereals. This cluster exhibited below-average calories, fat, sodium, and sugar levels while maintaining above-average amounts of protein, fiber, and potassium. In addition, cereals in this cluster received the highest consumer ratings among all clusters. These nutritional characteristics make Cluster 1 the most appropriate choice for elementary school cafeterias, as the cereals in this group best support a healthy diet.
+
+Yes, the data should be normalized before performing hierarchical clustering. Variables such as sodium, potassium, calories, and sugar are measured on different scales. Without normalization, variables with larger magnitudes would dominate the Euclidean distance calculations and disproportionately influence the clustering results. Standardizing the variables using Z-scores ensures that each variable contributes equally to the cluster formation process.
+
+
