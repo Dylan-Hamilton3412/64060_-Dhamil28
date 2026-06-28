@@ -1,0 +1,175 @@
+---
+title: "Final Exam"
+output:
+  word_document: default
+  html_notebook: default
+---
+
+Can monthly fuel purchases for U.S. power plants be grouped into distinct segments based on fuel quality, cost, and quantity, and what do these segments reveal about power generation practices?
+
+```{r}
+## All files relating to this assignment can be found at https://github.com/Dylan-Hamilton3412/64060_-Dhamil28
+## Import required libraries for data manipulation and cluster analysis
+library(tidyverse)
+library(dplyr)
+library(factoextra)
+library(ISLR)
+library(readr)
+library(caret)
+
+
+## Set seed to ensure reproducibility of the K-means results
+set.seed(1234)
+
+## import the data set
+FuelData <- read.csv("out_eia923__monthly_fuel_receipts_costs.csv", stringsAsFactors = FALSE)
+summary(FuelData)
+str(FuelData)
+
+FuelData[FuelData == "null"] <- NA
+
+## Remove variables with more than 40% missing values
+Missing_Percent <- colSums(is.na(FuelData)) / nrow(FuelData) * 100
+Missing_Percent
+
+FuelData <- FuelData[, Missing_Percent < 33]
+FuelData <- na.omit(FuelData)
+
+## Convert categorical variables to factors
+FuelData$state <- as.factor(FuelData$state)
+FuelData$fuel_type_code_pudl <- as.factor(FuelData$fuel_type_code_pudl)
+FuelData$plant_name_eia <- as.factor(FuelData$plant_name_eia)
+FuelData$utility_name_eia <- as.factor(FuelData$utility_name_eia)
+
+##Conver Categorical to numeric
+FuelData$fuel_cost_per_mmbtu <- as.numeric(FuelData$fuel_cost_per_mmbtu)
+FuelData$total_fuel_cost <- as.numeric(FuelData$total_fuel_cost)
+
+##Convert numeric to categorical
+FuelData$plant_id_eia <- as.character(FuelData$plant_id_eia)
+FuelData$plant_id_pudl <- as.character(FuelData$plant_id_pudl)
+FuelData$utility_id_eia <- as.character(FuelData$utility_id_eia)
+FuelData$utility_id_pudl <- as.character(FuelData$utility_id_pudl)
+summary(FuelData)
+str(FuelData)
+
+## Count negative fuel costs
+sum(FuelData$total_fuel_cost < 0, na.rm = TRUE)
+
+## View the negative records
+Negative_Costs <- FuelData %>%
+  filter(total_fuel_cost < 0)
+
+## Summary of negative values
+summary(Negative_Costs$total_fuel_cost)
+
+```
+
+```{r}
+
+## Randomly sample approximately 2% of the observations
+Sample_Index <- sample(1:nrow(FuelData), 0.02 * nrow(FuelData))
+FuelSample <- FuelData[Sample_Index,]
+
+
+## Create a dataset containing only the numeric variables for clustering
+Cluster_Data <- FuelSample %>%
+  select(fuel_received_units,
+         fuel_mmbtu_per_unit,
+         fuel_cost_per_mmbtu,
+         fuel_received_mmbtu,
+         total_fuel_cost,
+         sulfur_content_pct,
+         ash_content_pct)
+
+## Standardize the variables so each contributes equally
+Cluster_Data <- scale(Cluster_Data)
+Cluster_Data <- as.data.frame(Cluster_Data)
+summary(Cluster_Data)
+
+```
+
+```{r}
+## Run an elbow chart to determine the best fit of K without over-fitting the algorithm
+fviz_nbclust(Cluster_Data, kmeans, method = "wss")
+
+## Confirm the choice of K using silhouette values to maximize cluster separation
+fviz_nbclust(Cluster_Data, kmeans, method = "silhouette")
+
+##K Value will be 5 for the remainder of this project
+
+## Based on both methods, K =  appears to provide a reasonable balance between cluster separation and model complexity
+Num_KClust <- kmeans(Cluster_Data, centers = 5, nstart = 25)
+## Display the number of transactions assigned to each cluster
+Num_KClust$size
+
+## Visualize the clusters using a plot
+fviz_cluster(Num_KClust, data = Cluster_Data)
+```
+
+
+
+```{r}
+
+## Append cluster assignments to both the scaled numerical data and the original dataset
+Cluster_Data <- cbind(Cluster_Data, "Cluster" = Num_KClust$cluster)
+FuelSample <- cbind(FuelSample , "Cluster" = Num_KClust$cluster)
+
+## Calculate average values for each variable within each cluster to aid interpretation
+Cluster_Means <- aggregate(FuelSample[, c(10:14, 16:17)], by = list(Cluster = FuelSample$Cluster), mean)
+Cluster_Means
+
+Std_Dev_Means <- aggregate(Cluster_Data, by = list(Cluster = Cluster_Data$Cluster), mean)
+
+## Export cluster means for further examination. File added to GitHub along with assignment
+write.csv(Cluster_Means, "Cluster_Means.csv", row.names = FALSE) 
+write.csv(Std_Dev_Means, "Std_Dev_Means.csv", row.names = FALSE)
+
+
+## Compare cluster averages against overall dataset averages to identify distinguishing characteristics
+summary(FuelSample)
+
+## compare Fuel type category to identifies any similarities in the clusters
+table(FuelSample$Cluster, FuelSample$fuel_type_code_pudl)
+
+## Even without the fuel type being included in the clustering there is a strong separation when tabling showing a clear pattern between the clustering variables and the fuel type
+
+
+```
+Cluster 1 – Low-Volume Natural Gas and Oil Plants 
+-Below-average fuel received and energy production
+-Below-average total fuel cost
+-Low sulfur and ash content
+-Contains the majority of natural gas plants and all oil plants
+-Interpretation: Smaller or lower-utilization clean-burning facilities, including many peaking plants.
+
+Cluster 2 – Large-Scale Natural Gas Plants
+-Highest fuel received units (+2.05)
+-Above-average total fuel received and fuel cost
+-Very low sulfur and ash content
+-Entirely natural gas
+-Interpretation: Large, high-output natural gas generating stations operating at a much larger scale than Cluster 1.
+
+Cluster 3 – Fuel Cost Outlier
+-Extremely high fuel cost per MMBtu (+35.55)
+-All other variables below average
+-Only 4 observations
+-Interpretation: This cluster represents unusual fuel purchase records or pricing anomalies rather than a meaningful operational category. Because it contains only four observations, it should be interpreted as an outlier cluster rather than a typical group of power plants.
+
+Cluster 4 – High-Output Coal Plants
+-Very high fuel energy content (+1.81)
+-Highest total energy received (+3.07)
+-High total fuel cost (+2.00)
+-Highest sulfur and ash content
+-Entirely coal
+-Interpretation: Large baseload coal plants with high fuel consumption and relatively high emissions characteristics.
+
+Cluster 5 – Moderate Coal Plants
+-Above-average fuel energy content (+1.73)
+-Moderate fuel received and total fuel cost
+-Elevated sulfur and ash content
+-Entirely coal
+-Interpretation: Medium-sized coal facilities with similar fuel quality to Cluster 4 but operating at a smaller scale.
+
+Overall statement: In appears that the predominantly coal clusters have the hightest amount of MMBtu per unit meaning they output the most energy per unit of coal however at the same point it seems that these clusters also contribute to the most pollution by looking at the sulfur content and ash content. 
+ 
